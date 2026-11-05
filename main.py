@@ -6,6 +6,8 @@ import time
 from pathlib import Path
 
 
+# 1e-9은 일반적인 부동소수점 누적 오차를 허용하면서 실제 점수 차이는
+# 구분하기 위한 절대 허용오차입니다. 값의 규모가 크게 달라지면 조정할 수 있습니다.
 EPSILON = 1e-9
 MEASURE_REPEATS = 10
 DATA_FILE = Path("data.json")
@@ -22,6 +24,17 @@ def normalize_label(label):
     if value in ("x",):
         return "X"
     return None
+
+
+def read_label(name):
+    while True:
+        value = input(f"{name} 라벨 (Cross/+ 또는 X/x): ").strip()
+        normalized = normalize_label(value)
+
+        if normalized is not None:
+            return normalized
+
+        print("라벨 입력 오류: Cross, +, X, x 중 하나를 입력해주세요.")
 
 
 def validate_matrix(matrix, size, name="행렬"):
@@ -67,6 +80,7 @@ def read_matrix(size, name):
             return matrix
         except ValueError as error:
             print(f"입력 형식 오류: {error}")
+            print(f"예시: {' '.join(['0'] * size)}")
             print("행렬 전체를 다시 입력해주세요.")
 
 
@@ -101,6 +115,7 @@ def classify(score_a, score_b):
 
 
 def measure_average_ms(function, repeats=MEASURE_REPEATS):
+    """I/O를 제외하고 MAC 함수 호출 구간만 반복 측정합니다."""
     elapsed_times = []
 
     for _ in range(repeats):
@@ -137,24 +152,34 @@ def run_user_mode():
     print("\n[1] 필터 입력")
     filter_a = read_matrix(3, "필터 A")
     filter_b = read_matrix(3, "필터 B")
+    label_a = read_label("필터 A")
+    label_b = read_label("필터 B")
 
     print("\n[2] 패턴 입력")
     pattern = read_matrix(3, "패턴")
 
     score_a = mac_score(pattern, filter_a)
     score_b = mac_score(pattern, filter_b)
-    decision = classify(score_a, score_b)
+    raw_decision = classify(score_a, score_b)
+    decision = raw_decision
+    if raw_decision == "Cross":
+        decision = label_a
+    elif raw_decision == "X":
+        decision = label_b
     time_a = measure_average_ms(lambda: mac_score(pattern, filter_a))
     time_b = measure_average_ms(lambda: mac_score(pattern, filter_b))
 
     print("\n[3] MAC 결과")
-    print(f"필터 A 점수: {score_a:.10f}")
-    print(f"필터 B 점수: {score_b:.10f}")
+    print(f"필터 A ({label_a}) 점수: {score_a:.10f}")
+    print(f"필터 B ({label_b}) 점수: {score_b:.10f}")
     print(
         f"평균 연산 시간(ms, {MEASURE_REPEATS}회): "
         f"A={time_a:.6f}, B={time_b:.6f}"
     )
-    print(f"판정: {decision}")
+    if raw_decision == "UNDECIDED":
+        print("판정: 판정 불가 (UNDECIDED, 사용자 모드에서는 PASS/FAIL 집계 없음)")
+    else:
+        print(f"판정: {decision}")
     print("비교 정책: abs(A-B) < 1e-9이면 UNDECIDED")
 
     run_optimization_demo(pattern, filter_a)
@@ -218,7 +243,9 @@ def analyze_json_mode():
     total = 0
     passed = 0
     failed = 0
+    undecided = 0
     failures = []
+    failure_types = {}
     performance_inputs = {}
 
     print("\n[1] JSON 필터·패턴 분석")
@@ -263,6 +290,9 @@ def analyze_json_mode():
             decision = classify(cross_score, x_score)
             result = "PASS" if decision == expected else "FAIL"
 
+            if decision == "UNDECIDED":
+                undecided += 1
+
             print(f"Cross 점수: {cross_score:.10f}")
             print(f"X 점수: {x_score:.10f}")
             print(f"판정: {decision} | expected: {expected} | {result}")
@@ -277,10 +307,16 @@ def analyze_json_mode():
             else:
                 failed += 1
                 reason = f"판정 {decision}, expected {expected}"
+                failure_types["동점(UNDECIDED)"] = (
+                    failure_types.get("동점(UNDECIDED)", 0) + 1
+                )
 
         except (TypeError, ValueError, KeyError) as error:
             failed += 1
             reason = str(error)
+            failure_types["데이터/스키마 오류"] = (
+                failure_types.get("데이터/스키마 오류", 0) + 1
+            )
             print(f"{case_key}: FAIL - {reason}")
 
         if reason:
@@ -292,6 +328,12 @@ def analyze_json_mode():
     print(f"총 테스트: {total}개")
     print(f"통과: {passed}개")
     print(f"실패: {failed}개")
+    print(f"UNDECIDED: {undecided}개")
+
+    if failure_types:
+        print("실패 유형별 집계:")
+        for failure_type, count in failure_types.items():
+            print(f"- {failure_type}: {count}개")
 
     if failures:
         print("실패 케이스:")
