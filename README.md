@@ -141,4 +141,12 @@ mission3_mini_npu/
 
 1000×1000 대형 입력에서는 Python 리스트 전체를 메모리에 만드는 비용과 반복문 실행 시간이 커질 수 있습니다. 행 단위 처리로 메모리를 줄이거나, 실제 측정 후 더 적절한 자료구조와 병렬 처리 방식을 검토할 수 있습니다.
 
+## 실행 증빙
+
+- [3×3 사용자 입력 결과](docs/screenshots/mode1_user_input.png)
+- [JSON 케이스별 분석](docs/screenshots/mode2_cases.png)
+- [JSON 결과 요약](docs/screenshots/mode2_summary.png)
+- [성능 분석표](docs/screenshots/performance.png)
+- [보너스 패턴 생성](docs/screenshots/bonus_patterns.png)
+
 이번 과제에서는 CPU에서 표준 Python 반복문으로 실행했으며, 실제 NPU 하드웨어에서 실행한 결과는 아닙니다. NPU는 많은 MAC 연산을 병렬로 처리할 수 있지만, 데이터 이동과 메모리 대역폭도 병목이 될 수 있습니다.
